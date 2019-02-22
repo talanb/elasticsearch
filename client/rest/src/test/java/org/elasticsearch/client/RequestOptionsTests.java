@@ -115,11 +115,11 @@ public class RequestOptionsTests extends RestClientTestCase {
         }
 
         if (randomBoolean()) {
-            builder.setNodeSelector(mock(NodeSelector.class));
+            builder.setHttpAsyncResponseConsumerFactory(new HeapBufferedResponseConsumerFactory(1));
         }
 
         if (randomBoolean()) {
-            builder.setHttpAsyncResponseConsumerFactory(new HeapBufferedResponseConsumerFactory(1));
+            builder.setWarningsHandler(randomBoolean() ? WarningsHandler.STRICT : WarningsHandler.PERMISSIVE);
         }
 
         return builder;
@@ -137,10 +137,16 @@ public class RequestOptionsTests extends RestClientTestCase {
             mutant.addHeader("extra", "m");
             return mutant.build();
         case 1:
-            mutant.setNodeSelector(mock(NodeSelector.class));
+            mutant.setHttpAsyncResponseConsumerFactory(new HeapBufferedResponseConsumerFactory(5));
             return mutant.build();
         case 2:
-            mutant.setHttpAsyncResponseConsumerFactory(new HeapBufferedResponseConsumerFactory(5));
+            mutant.setWarningsHandler(new WarningsHandler() {
+                @Override
+                public boolean warningsShouldFailRequest(List<String> warnings) {
+                    fail("never called");
+                    return false;
+                }
+            });
             return mutant.build();
         default:
             throw new UnsupportedOperationException("Unknown mutation type [" + mutationType + "]");

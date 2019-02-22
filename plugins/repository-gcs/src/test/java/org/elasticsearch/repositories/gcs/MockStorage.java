@@ -81,6 +81,11 @@ class MockStorage implements Storage {
     }
 
     @Override
+    public Bucket lockRetentionPolicy(final BucketInfo bucket, final BucketTargetOption... options) {
+        return null;
+    }
+
+    @Override
     public Blob get(BlobId blob) {
         if (bucketName.equals(blob.getBucket())) {
             final byte[] bytes = blobs.get(blob.getName());
@@ -167,7 +172,27 @@ class MockStorage implements Storage {
     public ReadChannel reader(BlobId blob, BlobSourceOption... options) {
         if (bucketName.equals(blob.getBucket())) {
             final byte[] bytes = blobs.get(blob.getName());
-            final ReadableByteChannel readableByteChannel = Channels.newChannel(new ByteArrayInputStream(bytes));
+
+            final ReadableByteChannel readableByteChannel;
+            if (bytes != null) {
+                readableByteChannel = Channels.newChannel(new ByteArrayInputStream(bytes));
+            } else {
+                readableByteChannel = new ReadableByteChannel() {
+                    @Override
+                    public int read(ByteBuffer dst) throws IOException {
+                        throw new StorageException(404, "Object not found");
+                    }
+
+                    @Override
+                    public boolean isOpen() {
+                        return false;
+                    }
+
+                    @Override
+                    public void close() throws IOException {
+                    }
+                };
+            }
             return new ReadChannel() {
                 @Override
                 public void close() {

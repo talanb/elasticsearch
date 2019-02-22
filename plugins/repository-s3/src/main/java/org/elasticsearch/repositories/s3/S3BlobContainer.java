@@ -90,8 +90,11 @@ class S3BlobContainer extends AbstractBlobContainer {
         }
     }
 
+    /**
+     * This implementation ignores the failIfAlreadyExists flag as the S3 API has no way to enforce this due to its weak consistency model.
+     */
     @Override
-    public void writeBlob(String blobName, InputStream inputStream, long blobSize) throws IOException {
+    public void writeBlob(String blobName, InputStream inputStream, long blobSize, boolean failIfAlreadyExists) throws IOException {
         SocketAccess.doPrivilegedIOException(() -> {
             if (blobSize <= blobStore.bufferSizeInBytes()) {
                 executeSingleUpload(blobStore, buildKey(blobName), inputStream, blobSize);
@@ -103,12 +106,22 @@ class S3BlobContainer extends AbstractBlobContainer {
     }
 
     @Override
+    public void writeBlobAtomic(String blobName, InputStream inputStream, long blobSize, boolean failIfAlreadyExists) throws IOException {
+        writeBlob(blobName, inputStream, blobSize, failIfAlreadyExists);
+    }
+
+    @Override
     public void deleteBlob(String blobName) throws IOException {
         if (blobExists(blobName) == false) {
             throw new NoSuchFileException("Blob [" + blobName + "] does not exist");
         }
+        deleteBlobIgnoringIfNotExists(blobName);
+    }
 
+    @Override
+    public void deleteBlobIgnoringIfNotExists(String blobName) throws IOException {
         try (AmazonS3Reference clientReference = blobStore.clientReference()) {
+            // There is no way to know if an non-versioned object existed before the deletion
             SocketAccess.doPrivilegedVoid(() -> clientReference.client().deleteObject(blobStore.bucket(), buildKey(blobName)));
         } catch (final AmazonClientException e) {
             throw new IOException("Exception when deleting blob [" + blobName + "]", e);

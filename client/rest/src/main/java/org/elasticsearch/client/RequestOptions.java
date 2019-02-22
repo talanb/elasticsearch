@@ -24,35 +24,37 @@ import org.apache.http.Header;
 import org.apache.http.nio.protocol.HttpAsyncResponseConsumer;
 import org.elasticsearch.client.HttpAsyncResponseConsumerFactory.HeapBufferedResponseConsumerFactory;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-
-
-import java.util.ArrayList;
 
 /**
  * The portion of an HTTP request to Elasticsearch that can be
  * manipulated without changing Elasticsearch's behavior.
  */
 public final class RequestOptions {
+    /**
+     * Default request options.
+     */
     public static final RequestOptions DEFAULT = new Builder(
-        Collections.<Header>emptyList(), NodeSelector.ANY,
-        HeapBufferedResponseConsumerFactory.DEFAULT).build();
+            Collections.<Header>emptyList(), HeapBufferedResponseConsumerFactory.DEFAULT, null).build();
 
     private final List<Header> headers;
-    private final NodeSelector nodeSelector;
     private final HttpAsyncResponseConsumerFactory httpAsyncResponseConsumerFactory;
+    private final WarningsHandler warningsHandler;
 
     private RequestOptions(Builder builder) {
         this.headers = Collections.unmodifiableList(new ArrayList<>(builder.headers));
-        this.nodeSelector = builder.nodeSelector;
         this.httpAsyncResponseConsumerFactory = builder.httpAsyncResponseConsumerFactory;
+        this.warningsHandler = builder.warningsHandler;
     }
 
+    /**
+     * Create a builder that contains these options but can be modified.
+     */
     public Builder toBuilder() {
-        Builder builder = new Builder(headers, nodeSelector, httpAsyncResponseConsumerFactory);
-        return builder;
+        return new Builder(headers, httpAsyncResponseConsumerFactory, warningsHandler);
     }
 
     /**
@@ -60,14 +62,6 @@ public final class RequestOptions {
      */
     public List<Header> getHeaders() {
         return headers;
-    }
-
-    /**
-     * The selector that chooses which nodes are valid destinations for
-     * {@link Request}s with these options.
-     */
-    public NodeSelector getNodeSelector() {
-        return nodeSelector;
     }
 
     /**
@@ -80,12 +74,35 @@ public final class RequestOptions {
         return httpAsyncResponseConsumerFactory;
     }
 
+    /**
+     * How this request should handle warnings. If null (the default) then
+     * this request will default to the behavior dictacted by
+     * {@link RestClientBuilder#setStrictDeprecationMode}.
+     * <p>
+     * This can be set to {@link WarningsHandler#PERMISSIVE} if the client
+     * should ignore all warnings which is the same behavior as setting
+     * strictDeprecationMode to true. It can be set to
+     * {@link WarningsHandler#STRICT} if the client should fail if there are
+     * any warnings which is the same behavior as settings
+     * strictDeprecationMode to false.
+     * <p>
+     * It can also be set to a custom implementation of
+     * {@linkplain WarningsHandler} to permit only certain warnings or to
+     * fail the request if the warnings returned don't
+     * <strong>exactly</strong> match some set.
+     */
+    public WarningsHandler getWarningsHandler() {
+        return warningsHandler;
+    }
+
     @Override
     public String toString() {
         StringBuilder b = new StringBuilder();
         b.append("RequestOptions{");
+        boolean comma = false;
         if (headers.size() > 0) {
-            b.append(", headers=");
+            b.append("headers=");
+            comma = true;
             for (int h = 0; h < headers.size(); h++) {
                 if (h != 0) {
                     b.append(',');
@@ -93,11 +110,15 @@ public final class RequestOptions {
                 b.append(headers.get(h).toString());
             }
         }
-        if (nodeSelector != NodeSelector.ANY) {
-            b.append(", nodeSelector=").append(nodeSelector);
-        }
         if (httpAsyncResponseConsumerFactory != HttpAsyncResponseConsumerFactory.DEFAULT) {
-            b.append(", consumerFactory=").append(httpAsyncResponseConsumerFactory);
+            if (comma) b.append(", ");
+            comma = true;
+            b.append("consumerFactory=").append(httpAsyncResponseConsumerFactory);
+        }
+        if (warningsHandler != null) {
+            if (comma) b.append(", ");
+            comma = true;
+            b.append("warningsHandler=").append(warningsHandler);
         }
         return b.append('}').toString();
     }
@@ -113,25 +134,30 @@ public final class RequestOptions {
 
         RequestOptions other = (RequestOptions) obj;
         return headers.equals(other.headers)
-                && nodeSelector.equals(other.nodeSelector)
-                && httpAsyncResponseConsumerFactory.equals(other.httpAsyncResponseConsumerFactory);
+                && httpAsyncResponseConsumerFactory.equals(other.httpAsyncResponseConsumerFactory)
+                && Objects.equals(warningsHandler, other.warningsHandler);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(headers, nodeSelector, httpAsyncResponseConsumerFactory);
+        return Objects.hash(headers, httpAsyncResponseConsumerFactory, warningsHandler);
     }
 
+    /**
+     * Builds {@link RequestOptions}. Get one by calling
+     * {@link RequestOptions#toBuilder} on {@link RequestOptions#DEFAULT} or
+     * any other {@linkplain RequestOptions}.
+     */
     public static class Builder {
         private final List<Header> headers;
-        private NodeSelector nodeSelector;
         private HttpAsyncResponseConsumerFactory httpAsyncResponseConsumerFactory;
+        private WarningsHandler warningsHandler;
 
-        private Builder(List<Header> headers, NodeSelector nodeSelector,
-                HttpAsyncResponseConsumerFactory httpAsyncResponseConsumerFactory) {
+        private Builder(List<Header> headers, HttpAsyncResponseConsumerFactory httpAsyncResponseConsumerFactory,
+                WarningsHandler warningsHandler) {
             this.headers = new ArrayList<>(headers);
-            this.nodeSelector = nodeSelector;
             this.httpAsyncResponseConsumerFactory = httpAsyncResponseConsumerFactory;
+            this.warningsHandler = warningsHandler;
         }
 
         /**
@@ -151,14 +177,6 @@ public final class RequestOptions {
         }
 
         /**
-         * Configure the selector that chooses which nodes are valid
-         * destinations for {@link Request}s with these options
-         */
-        public void setNodeSelector(NodeSelector nodeSelector) {
-            this.nodeSelector = Objects.requireNonNull(nodeSelector, "nodeSelector cannot be null");
-        }
-
-        /**
          * Set the {@link HttpAsyncResponseConsumerFactory} used to create one
          * {@link HttpAsyncResponseConsumer} callback per retry. Controls how the
          * response body gets streamed from a non-blocking HTTP connection on the
@@ -167,6 +185,27 @@ public final class RequestOptions {
         public void setHttpAsyncResponseConsumerFactory(HttpAsyncResponseConsumerFactory httpAsyncResponseConsumerFactory) {
             this.httpAsyncResponseConsumerFactory =
                     Objects.requireNonNull(httpAsyncResponseConsumerFactory, "httpAsyncResponseConsumerFactory cannot be null");
+        }
+
+        /**
+         * How this request should handle warnings. If null (the default) then
+         * this request will default to the behavior dictacted by
+         * {@link RestClientBuilder#setStrictDeprecationMode}.
+         * <p>
+         * This can be set to {@link WarningsHandler#PERMISSIVE} if the client
+         * should ignore all warnings which is the same behavior as setting
+         * strictDeprecationMode to true. It can be set to
+         * {@link WarningsHandler#STRICT} if the client should fail if there are
+         * any warnings which is the same behavior as settings
+         * strictDeprecationMode to false.
+         * <p>
+         * It can also be set to a custom implementation of
+         * {@linkplain WarningsHandler} to permit only certain warnings or to
+         * fail the request if the warnings returned don't
+         * <strong>exactly</strong> match some set.
+         */
+        public void setWarningsHandler(WarningsHandler warningsHandler) {
+            this.warningsHandler = warningsHandler;
         }
     }
 

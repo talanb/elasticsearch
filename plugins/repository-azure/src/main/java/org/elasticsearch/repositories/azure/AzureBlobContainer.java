@@ -21,12 +21,12 @@ package org.elasticsearch.repositories.azure;
 
 import com.microsoft.azure.storage.LocationMode;
 import com.microsoft.azure.storage.StorageException;
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.blobstore.BlobMetaData;
 import org.elasticsearch.common.blobstore.BlobPath;
 import org.elasticsearch.common.blobstore.support.AbstractBlobContainer;
-import org.elasticsearch.common.logging.Loggers;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -37,7 +37,7 @@ import java.util.Map;
 
 public class AzureBlobContainer extends AbstractBlobContainer {
 
-    private final Logger logger = Loggers.getLogger(AzureBlobContainer.class);
+    private final Logger logger = LogManager.getLogger(AzureBlobContainer.class);
     private final AzureBlobStore blobStore;
 
     private final String keyPath;
@@ -86,28 +86,33 @@ public class AzureBlobContainer extends AbstractBlobContainer {
     }
 
     @Override
-    public void writeBlob(String blobName, InputStream inputStream, long blobSize) throws IOException {
+    public void writeBlob(String blobName, InputStream inputStream, long blobSize, boolean failIfAlreadyExists) throws IOException {
         logger.trace("writeBlob({}, stream, {})", buildKey(blobName), blobSize);
 
         try {
-            blobStore.writeBlob(buildKey(blobName), inputStream, blobSize);
+            blobStore.writeBlob(buildKey(blobName), inputStream, blobSize, failIfAlreadyExists);
         } catch (URISyntaxException|StorageException e) {
             throw new IOException("Can not write blob " + blobName, e);
         }
     }
 
     @Override
+    public void writeBlobAtomic(String blobName, InputStream inputStream, long blobSize, boolean failIfAlreadyExists) throws IOException {
+        writeBlob(blobName, inputStream, blobSize, failIfAlreadyExists);
+    }
+
+    @Override
     public void deleteBlob(String blobName) throws IOException {
         logger.trace("deleteBlob({})", blobName);
 
-        if (!blobExists(blobName)) {
-            throw new NoSuchFileException("Blob [" + blobName + "] does not exist");
-        }
-
         try {
             blobStore.deleteBlob(buildKey(blobName));
-        } catch (URISyntaxException | StorageException e) {
-            logger.warn("can not access [{}] in container {{}}: {}", blobName, blobStore, e.getMessage());
+        } catch (StorageException e) {
+            if (e.getHttpStatusCode() == HttpURLConnection.HTTP_NOT_FOUND) {
+                throw new NoSuchFileException(e.getMessage());
+            }
+            throw new IOException(e);
+        } catch (URISyntaxException e) {
             throw new IOException(e);
         }
     }

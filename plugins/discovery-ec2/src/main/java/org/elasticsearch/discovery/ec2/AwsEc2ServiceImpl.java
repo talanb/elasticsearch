@@ -19,36 +19,32 @@
 
 package org.elasticsearch.discovery.ec2;
 
-import java.util.Random;
-import java.util.concurrent.atomic.AtomicReference;
-
 import com.amazonaws.ClientConfiguration;
+import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSCredentialsProvider;
-import com.amazonaws.auth.BasicAWSCredentials;
 import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.http.IdleConnectionReaper;
 import com.amazonaws.internal.StaticCredentialsProvider;
 import com.amazonaws.retry.RetryPolicy;
 import com.amazonaws.services.ec2.AmazonEC2;
 import com.amazonaws.services.ec2.AmazonEC2Client;
+
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.common.Randomness;
 import org.elasticsearch.common.Strings;
-import org.elasticsearch.common.component.AbstractComponent;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.util.LazyInitializable;
 
-class AwsEc2ServiceImpl extends AbstractComponent implements AwsEc2Service {
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicReference;
 
-    public static final String EC2_METADATA_URL = "http://169.254.169.254/latest/meta-data/";
+class AwsEc2ServiceImpl implements AwsEc2Service {
+    
+    private static final Logger logger = LogManager.getLogger(AwsEc2ServiceImpl.class);
 
     private final AtomicReference<LazyInitializable<AmazonEc2Reference, ElasticsearchException>> lazyClientReference =
             new AtomicReference<>();
-
-    AwsEc2ServiceImpl(Settings settings) {
-        super(settings);
-    }
 
     private AmazonEC2 buildClient(Ec2ClientSettings clientSettings) {
         final AWSCredentialsProvider credentials = buildCredentials(logger, clientSettings);
@@ -99,7 +95,7 @@ class AwsEc2ServiceImpl extends AbstractComponent implements AwsEc2Service {
 
     // pkg private for tests
     static AWSCredentialsProvider buildCredentials(Logger logger, Ec2ClientSettings clientSettings) {
-        final BasicAWSCredentials credentials = clientSettings.credentials;
+        final AWSCredentials credentials = clientSettings.credentials;
         if (credentials == null) {
             logger.debug("Using either environment variables, system properties or instance profile credentials");
             return new DefaultAWSCredentialsProviderChain();

@@ -43,9 +43,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class MetaDataIndexAliasesServiceTests extends ESTestCase {
-    private final AliasValidator aliasValidator = new AliasValidator(Settings.EMPTY);
+    private final AliasValidator aliasValidator = new AliasValidator();
     private final MetaDataDeleteIndexService deleteIndexService = mock(MetaDataDeleteIndexService.class);
-    private final MetaDataIndexAliasesService service = new MetaDataIndexAliasesService(Settings.EMPTY, null, null, aliasValidator,
+    private final MetaDataIndexAliasesService service = new MetaDataIndexAliasesService(null, null, aliasValidator,
             deleteIndexService, xContentRegistry());
 
     public MetaDataIndexAliasesServiceTests() {
@@ -136,8 +136,7 @@ public class MetaDataIndexAliasesServiceTests extends ESTestCase {
         ClusterState after = service.innerExecute(before, Arrays.asList(
             new AliasAction.Add("test", "alias", null, null, null, false)));
         assertFalse(after.metaData().index("test").getAliases().get("alias").writeIndex());
-        assertThat(((AliasOrIndex.Alias) after.metaData().getAliasAndIndexLookup().get("alias")).getWriteIndex(),
-            equalTo(after.metaData().index("test")));
+        assertNull(((AliasOrIndex.Alias) after.metaData().getAliasAndIndexLookup().get("alias")).getWriteIndex());
 
         after = service.innerExecute(before, Arrays.asList(
             new AliasAction.Add("test", "alias", null, null, null, null)));

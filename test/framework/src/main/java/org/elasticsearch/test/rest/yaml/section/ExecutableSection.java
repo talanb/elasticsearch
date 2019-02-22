@@ -40,6 +40,7 @@ public interface ExecutableSection {
     List<NamedXContentRegistry.Entry> DEFAULT_EXECUTABLE_CONTEXTS = unmodifiableList(Arrays.asList(
             new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("do"), DoSection::parse),
             new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("set"), SetSection::parse),
+            new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("transform_and_set"), TransformAndSetSection::parse),
             new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("match"), MatchAssertion::parse),
             new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("is_true"), IsTrueAssertion::parse),
             new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("is_false"), IsFalseAssertion::parse),
@@ -47,6 +48,7 @@ public interface ExecutableSection {
             new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("gte"), GreaterThanEqualToAssertion::parse),
             new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("lt"), LessThanAssertion::parse),
             new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("lte"), LessThanOrEqualToAssertion::parse),
+            new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("contains"), ContainsAssertion::parse),
             new NamedXContentRegistry.Entry(ExecutableSection.class, new ParseField("length"), LengthAssertion::parse)));
 
     /**

@@ -44,26 +44,16 @@ public class CommandLineHttpClientTests extends ESTestCase {
     }
 
     @After
-    public void shutdown() throws Exception {
+    public void shutdown() {
         webServer.close();
     }
 
     public void testCommandLineHttpClientCanExecuteAndReturnCorrectResultUsingSSLSettings() throws Exception {
-        Path resource = getDataPath("/org/elasticsearch/xpack/security/keystore/testnode.jks");
-        MockSecureSettings secureSettings = new MockSecureSettings();
-        Settings settings;
-        if (randomBoolean()) {
-            // with http ssl settings
-            secureSettings.setString("xpack.security.http.ssl.truststore.secure_password", "testnode");
-            settings = Settings.builder().put("xpack.security.http.ssl.truststore.path", resource.toString())
-                    .put("xpack.security.http.ssl.verification_mode", VerificationMode.CERTIFICATE).setSecureSettings(secureSettings)
-                    .build();
-        } else {
-            // with global settings
-            secureSettings.setString("xpack.ssl.truststore.secure_password", "testnode");
-            settings = Settings.builder().put("xpack.ssl.truststore.path", resource.toString())
-                    .put("xpack.ssl.verification_mode", VerificationMode.CERTIFICATE).setSecureSettings(secureSettings).build();
-        }
+        Path certPath = getDataPath("/org/elasticsearch/xpack/security/transport/ssl/certs/simple/testnode.crt");
+        Settings settings = Settings.builder()
+            .put("xpack.security.http.ssl.certificate_authorities", certPath.toString())
+            .put("xpack.security.http.ssl.verification_mode", VerificationMode.CERTIFICATE)
+            .build();
         CommandLineHttpClient client = new CommandLineHttpClient(settings, environment);
         HttpResponse httpResponse = client.execute("GET", new URL("https://localhost:" + webServer.getPort() + "/test"), "u1",
                 new SecureString(new char[]{'p'}), () -> null, is -> responseBuilder(is));
@@ -74,13 +64,17 @@ public class CommandLineHttpClientTests extends ESTestCase {
     }
 
     private MockWebServer createMockWebServer() {
-        Path resource = getDataPath("/org/elasticsearch/xpack/security/keystore/testnode.jks");
+        Path certPath = getDataPath("/org/elasticsearch/xpack/security/transport/ssl/certs/simple/testnode.crt");
+        Path keyPath = getDataPath("/org/elasticsearch/xpack/security/transport/ssl/certs/simple/testnode.pem");
         MockSecureSettings secureSettings = new MockSecureSettings();
-        secureSettings.setString("xpack.ssl.keystore.secure_password", "testnode");
-        Settings settings =
-                Settings.builder().put("xpack.ssl.keystore.path", resource.toString()).setSecureSettings(secureSettings).build();
+        secureSettings.setString("xpack.security.http.ssl.secure_key_passphrase", "testnode");
+        Settings settings = Settings.builder()
+            .put("xpack.security.http.ssl.key", keyPath.toString())
+            .put("xpack.security.http.ssl.certificate", certPath.toString())
+            .setSecureSettings(secureSettings)
+            .build();
         TestsSSLService sslService = new TestsSSLService(settings, environment);
-        return new MockWebServer(sslService.sslContext(), false);
+        return new MockWebServer(sslService.sslContext("xpack.security.http.ssl."), false);
     }
 
     private HttpResponseBuilder responseBuilder(final InputStream is) throws IOException {

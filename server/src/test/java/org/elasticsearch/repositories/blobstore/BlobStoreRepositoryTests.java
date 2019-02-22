@@ -19,15 +19,23 @@
 
 package org.elasticsearch.repositories.blobstore;
 
-import org.elasticsearch.action.admin.cluster.repositories.put.PutRepositoryResponse;
 import org.elasticsearch.action.admin.cluster.snapshots.create.CreateSnapshotResponse;
+import org.elasticsearch.action.support.master.AcknowledgedResponse;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.cluster.metadata.RepositoryMetaData;
 import org.elasticsearch.common.UUIDs;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.unit.ByteSizeUnit;
+import org.elasticsearch.common.xcontent.NamedXContentRegistry;
+import org.elasticsearch.env.Environment;
+import org.elasticsearch.plugins.Plugin;
+import org.elasticsearch.plugins.RepositoryPlugin;
 import org.elasticsearch.repositories.IndexId;
 import org.elasticsearch.repositories.RepositoriesService;
+import org.elasticsearch.repositories.Repository;
 import org.elasticsearch.repositories.RepositoryData;
 import org.elasticsearch.repositories.RepositoryException;
+import org.elasticsearch.repositories.fs.FsRepository;
 import org.elasticsearch.snapshots.SnapshotId;
 import org.elasticsearch.snapshots.SnapshotState;
 import org.elasticsearch.test.ESIntegTestCase;
@@ -37,17 +45,41 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static org.elasticsearch.repositories.RepositoryDataTests.generateRandomRepoData;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.nullValue;
 
 /**
  * Tests for the {@link BlobStoreRepository} and its subclasses.
  */
 public class BlobStoreRepositoryTests extends ESSingleNodeTestCase {
+
+    static final String REPO_TYPE = "fsLike";
+
+    protected Collection<Class<? extends Plugin>> getPlugins() {
+        return Arrays.asList(FsLikeRepoPlugin.class);
+    }
+
+    // the reason for this plug-in is to drop any assertSnapshotOrGenericThread as mostly all access in this test goes from test threads
+    public static class FsLikeRepoPlugin extends org.elasticsearch.plugins.Plugin implements RepositoryPlugin {
+
+        @Override
+        public Map<String, Repository.Factory> getRepositories(Environment env, NamedXContentRegistry namedXContentRegistry) {
+            return Collections.singletonMap(REPO_TYPE,
+                (metadata) -> new FsRepository(metadata, env, namedXContentRegistry) {
+                    @Override
+                    protected void assertSnapshotOrGenericThread() {
+                        // eliminate thread name check as we access blobStore on test/main threads
+                    }
+                });
+        }
+    }
 
     public void testRetrieveSnapshots() throws Exception {
         final Client client = client();
@@ -55,9 +87,9 @@ public class BlobStoreRepositoryTests extends ESSingleNodeTestCase {
         final String repositoryName = "test-repo";
 
         logger.info("-->  creating repository");
-        PutRepositoryResponse putRepositoryResponse =
+        AcknowledgedResponse putRepositoryResponse =
             client.admin().cluster().preparePutRepository(repositoryName)
-                                    .setType("fs")
+                                    .setType(REPO_TYPE)
                                     .setSettings(Settings.builder().put(node().settings()).put("location", location))
                                     .get();
         assertThat(putRepositoryResponse.isAcknowledged(), equalTo(true));
@@ -93,7 +125,7 @@ public class BlobStoreRepositoryTests extends ESSingleNodeTestCase {
 
         logger.info("--> make sure the node's repository can resolve the snapshots");
         final RepositoriesService repositoriesService = getInstanceFromNode(RepositoriesService.class);
-        @SuppressWarnings("unchecked") final BlobStoreRepository repository =
+        final BlobStoreRepository repository =
             (BlobStoreRepository) repositoriesService.repository(repositoryName);
         final List<SnapshotId> originalSnapshots = Arrays.asList(snapshotId1, snapshotId2);
 
@@ -202,21 +234,54 @@ public class BlobStoreRepositoryTests extends ESSingleNodeTestCase {
         assertEquals(0, repository.getRepositoryData().getIncompatibleSnapshotIds().size());
     }
 
+    public void testBadChunksize() throws Exception {
+        final Client client = client();
+        final Path location = ESIntegTestCase.randomRepoPath(node().settings());
+        final String repositoryName = "test-repo";
+
+        expectThrows(RepositoryException.class, () ->
+            client.admin().cluster().preparePutRepository(repositoryName)
+                .setType(REPO_TYPE)
+                .setSettings(Settings.builder().put(node().settings())
+                    .put("location", location)
+                    .put("chunk_size", randomLongBetween(-10, 0), ByteSizeUnit.BYTES))
+                .get());
+    }
+
+    public void testFsRepositoryCompressDeprecated() {
+        final Path location = ESIntegTestCase.randomRepoPath(node().settings());
+        final Settings settings = Settings.builder().put(node().settings()).put("location", location).build();
+        final RepositoryMetaData metaData = new RepositoryMetaData("test-repo", REPO_TYPE, settings);
+
+        Settings useCompressSettings = Settings.builder()
+            .put(node().getEnvironment().settings())
+            .put(FsRepository.REPOSITORIES_COMPRESS_SETTING.getKey(), true)
+            .build();
+        Environment useCompressEnvironment =
+            new Environment(useCompressSettings, node().getEnvironment().configFile());
+
+        new FsRepository(metaData, useCompressEnvironment, null);
+
+        assertWarnings("[repositories.fs.compress] setting was deprecated in Elasticsearch and will be removed in a future release!" +
+            " See the breaking changes documentation for the next major version.");
+    }
+
     private BlobStoreRepository setupRepo() {
         final Client client = client();
         final Path location = ESIntegTestCase.randomRepoPath(node().settings());
         final String repositoryName = "test-repo";
 
-        PutRepositoryResponse putRepositoryResponse =
+        AcknowledgedResponse putRepositoryResponse =
             client.admin().cluster().preparePutRepository(repositoryName)
-                                    .setType("fs")
+                                    .setType(REPO_TYPE)
                                     .setSettings(Settings.builder().put(node().settings()).put("location", location))
                                     .get();
         assertThat(putRepositoryResponse.isAcknowledged(), equalTo(true));
 
         final RepositoriesService repositoriesService = getInstanceFromNode(RepositoriesService.class);
-        @SuppressWarnings("unchecked") final BlobStoreRepository repository =
+        final BlobStoreRepository repository =
             (BlobStoreRepository) repositoriesService.repository(repositoryName);
+        assertThat("getBlobContainer has to be lazy initialized", repository.getBlobContainer(), nullValue());
         return repository;
     }
 

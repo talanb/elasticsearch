@@ -5,7 +5,7 @@
           wait_for_status: yellow
 
   - do:
-      xpack.watcher.put_watch:
+      watcher.put_watch:
         id: "hipchat_v1_watch"
         body:  >
           {
@@ -37,7 +37,7 @@
           }
   
   - do:
-      xpack.watcher.execute_watch:
+      watcher.execute_watch:
         id: "hipchat_v1_watch"
         body: >
           {
@@ -69,6 +69,7 @@
 
   - do:
       search:
+        rest_total_hits_as_int: true
         index: ".watcher-history-*"
         body: >
           {
@@ -100,7 +101,7 @@
 
   # custom rooms, custom users and custom from are not allowed for this account type to be configured
   - do:
-      xpack.watcher.put_watch:
+      watcher.put_watch:
         id: "hipchat_integration_account_watch"
         body:  >
           {
@@ -130,7 +131,7 @@
           }
   
   - do:
-      xpack.watcher.execute_watch:
+      watcher.execute_watch:
         id: "hipchat_integration_account_watch"
         body: >
           {
@@ -158,6 +159,7 @@
 
   - do:
       search:
+        rest_total_hits_as_int: true
         index: ".watcher-history-*"
         body: >
           {
@@ -184,7 +186,7 @@
           wait_for_status: yellow
 
   - do:
-      xpack.watcher.put_watch:
+      watcher.put_watch:
         id: "hipchat_user_account_watch"
         body:  >
           {
@@ -214,7 +216,7 @@
           }
   
   - do:
-      xpack.watcher.execute_watch:
+      watcher.execute_watch:
         id: "hipchat_user_account_watch"
         body: >
           {
@@ -248,6 +250,7 @@
 
   - do:
       search:
+        rest_total_hits_as_int: true
         index: ".watcher-history-*"
         body: >
           {

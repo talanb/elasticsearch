@@ -35,7 +35,7 @@ public abstract class AbstractBulkByScrollRequestBuilder<
     private final SearchRequestBuilder source;
 
     protected AbstractBulkByScrollRequestBuilder(ElasticsearchClient client,
-            Action<Request, BulkByScrollResponse> action, SearchRequestBuilder source, Request request) {
+                                                 Action<BulkByScrollResponse> action, SearchRequestBuilder source, Request request) {
         super(client, action, request);
         this.source = source;
     }
@@ -75,7 +75,7 @@ public abstract class AbstractBulkByScrollRequestBuilder<
     }
 
     /**
-     * Should we version conflicts cause the action to abort?
+     * Set whether or not version conflicts cause the action to abort.
      */
     public Self abortOnVersionConflict(boolean abortOnVersionConflict) {
         request.setAbortOnVersionConflict(abortOnVersionConflict);

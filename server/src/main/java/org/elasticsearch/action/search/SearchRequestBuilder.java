@@ -26,11 +26,11 @@ import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.script.Script;
-import org.elasticsearch.search.collapse.CollapseBuilder;
 import org.elasticsearch.search.Scroll;
 import org.elasticsearch.search.aggregations.AggregationBuilder;
 import org.elasticsearch.search.aggregations.PipelineAggregationBuilder;
 import org.elasticsearch.search.builder.SearchSourceBuilder;
+import org.elasticsearch.search.collapse.CollapseBuilder;
 import org.elasticsearch.search.fetch.subphase.highlight.HighlightBuilder;
 import org.elasticsearch.search.rescore.RescorerBuilder;
 import org.elasticsearch.search.slice.SliceBuilder;
@@ -224,6 +224,15 @@ public class SearchRequestBuilder extends ActionRequestBuilder<SearchRequest, Se
         sourceBuilder().version(version);
         return this;
     }
+    
+    /**
+     * Should each {@link org.elasticsearch.search.SearchHit} be returned with the
+     * sequence number and primary term of the last modification of the document.
+     */
+    public SearchRequestBuilder seqNoAndPrimaryTerm(boolean seqNoAndPrimaryTerm) {
+        sourceBuilder().seqNoAndPrimaryTerm(seqNoAndPrimaryTerm);
+        return this;
+    }
 
     /**
      * Sets the boost a specific index will receive when the query is executed against it.
@@ -341,7 +350,7 @@ public class SearchRequestBuilder extends ActionRequestBuilder<SearchRequest, Se
      *
      * @see org.elasticsearch.search.sort.SortBuilders
      */
-    public SearchRequestBuilder addSort(SortBuilder sort) {
+    public SearchRequestBuilder addSort(SortBuilder<?> sort) {
         sourceBuilder().sort(sort);
         return this;
     }
@@ -377,13 +386,10 @@ public class SearchRequestBuilder extends ActionRequestBuilder<SearchRequest, Se
     }
 
     /**
-     * Adds stored fields to load and return (note, it must be stored) as part of the search request.
-     * To disable the stored fields entirely (source and metadata fields) use {@code storedField("_none_")}.
-     * @deprecated Use {@link SearchRequestBuilder#storedFields(String...)} instead.
+     * Indicates if the total hit count for the query should be tracked. Defaults to {@code true}
      */
-    @Deprecated
-    public SearchRequestBuilder fields(String... fields) {
-        sourceBuilder().storedFields(Arrays.asList(fields));
+    public SearchRequestBuilder setTrackTotalHitsUpTo(int trackTotalHitsUpTo) {
+        sourceBuilder().trackTotalHitsUpTo(trackTotalHitsUpTo);
         return this;
     }
 

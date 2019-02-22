@@ -28,6 +28,9 @@ import com.google.cloud.storage.Bucket;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.Storage.BlobListOption;
 import com.google.cloud.storage.StorageException;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.elasticsearch.common.SuppressForbidden;
 import org.elasticsearch.common.blobstore.BlobContainer;
 import org.elasticsearch.common.blobstore.BlobMetaData;
@@ -36,8 +39,6 @@ import org.elasticsearch.common.blobstore.BlobStore;
 import org.elasticsearch.common.blobstore.BlobStoreException;
 import org.elasticsearch.common.blobstore.support.PlainBlobMetaData;
 import org.elasticsearch.common.collect.MapBuilder;
-import org.elasticsearch.common.component.AbstractComponent;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.core.internal.io.Streams;
 
 import java.io.ByteArrayOutputStream;
@@ -54,9 +55,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static java.net.HttpURLConnection.HTTP_NOT_FOUND;
 import static java.net.HttpURLConnection.HTTP_PRECON_FAILED;
 
-class GoogleCloudStorageBlobStore extends AbstractComponent implements BlobStore {
+class GoogleCloudStorageBlobStore implements BlobStore {
+    
+    private static final Logger logger = LogManager.getLogger(GoogleCloudStorageBlobStore.class);
 
     // The recommended maximum size of a blob that should be uploaded in a single
     // request. Larger files should be uploaded over multiple requests (this is
@@ -68,8 +72,7 @@ class GoogleCloudStorageBlobStore extends AbstractComponent implements BlobStore
     private final String clientName;
     private final GoogleCloudStorageService storageService;
 
-    GoogleCloudStorageBlobStore(Settings settings, String bucketName, String clientName, GoogleCloudStorageService storageService) {
-        super(settings);
+    GoogleCloudStorageBlobStore(String bucketName, String clientName, GoogleCloudStorageService storageService) {
         this.bucketName = bucketName;
         this.clientName = clientName;
         this.storageService = storageService;
@@ -163,16 +166,19 @@ class GoogleCloudStorageBlobStore extends AbstractComponent implements BlobStore
      */
     InputStream readBlob(String blobName) throws IOException {
         final BlobId blobId = BlobId.of(bucketName, blobName);
-        final Blob blob = SocketAccess.doPrivilegedIOException(() -> client().get(blobId));
-        if (blob == null) {
-            throw new NoSuchFileException("Blob [" + blobName + "] does not exit");
-        }
-        final ReadChannel readChannel = SocketAccess.doPrivilegedIOException(blob::reader);
+        final ReadChannel readChannel = SocketAccess.doPrivilegedIOException(() -> client().reader(blobId));
         return Channels.newInputStream(new ReadableByteChannel() {
             @SuppressForbidden(reason = "Channel is based of a socket not a file")
             @Override
             public int read(ByteBuffer dst) throws IOException {
-                return SocketAccess.doPrivilegedIOException(() -> readChannel.read(dst));
+                try {
+                    return SocketAccess.doPrivilegedIOException(() -> readChannel.read(dst));
+                } catch (StorageException e) {
+                    if (e.getCode() == HTTP_NOT_FOUND) {
+                        throw new NoSuchFileException("Blob [" + blobName + "] does not exist");
+                    }
+                    throw e;
+                }
             }
 
             @Override
@@ -189,16 +195,16 @@ class GoogleCloudStorageBlobStore extends AbstractComponent implements BlobStore
 
     /**
      * Writes a blob in the specific bucket
-     *
-     * @param inputStream content of the blob to be written
+     *  @param inputStream content of the blob to be written
      * @param blobSize    expected size of the blob to be written
+     * @param failIfAlreadyExists whether to throw a FileAlreadyExistsException if the given blob already exists
      */
-    void writeBlob(String blobName, InputStream inputStream, long blobSize) throws IOException {
+    void writeBlob(String blobName, InputStream inputStream, long blobSize, boolean failIfAlreadyExists) throws IOException {
         final BlobInfo blobInfo = BlobInfo.newBuilder(bucketName, blobName).build();
         if (blobSize > LARGE_BLOB_THRESHOLD_BYTE_SIZE) {
-            writeBlobResumable(blobInfo, inputStream);
+            writeBlobResumable(blobInfo, inputStream, failIfAlreadyExists);
         } else {
-            writeBlobMultipart(blobInfo, inputStream, blobSize);
+            writeBlobMultipart(blobInfo, inputStream, blobSize, failIfAlreadyExists);
         }
     }
 
@@ -206,14 +212,17 @@ class GoogleCloudStorageBlobStore extends AbstractComponent implements BlobStore
      * Uploads a blob using the "resumable upload" method (multiple requests, which
      * can be independently retried in case of failure, see
      * https://cloud.google.com/storage/docs/json_api/v1/how-tos/resumable-upload
-     *
      * @param blobInfo the info for the blob to be uploaded
      * @param inputStream the stream containing the blob data
+     * @param failIfAlreadyExists whether to throw a FileAlreadyExistsException if the given blob already exists
      */
-    private void writeBlobResumable(BlobInfo blobInfo, InputStream inputStream) throws IOException {
+    private void writeBlobResumable(BlobInfo blobInfo, InputStream inputStream, boolean failIfAlreadyExists) throws IOException {
         try {
+            final Storage.BlobWriteOption[] writeOptions = failIfAlreadyExists ?
+                new Storage.BlobWriteOption[] { Storage.BlobWriteOption.doesNotExist() } :
+                new Storage.BlobWriteOption[0];
             final WriteChannel writeChannel = SocketAccess
-                    .doPrivilegedIOException(() -> client().writer(blobInfo, Storage.BlobWriteOption.doesNotExist()));
+                    .doPrivilegedIOException(() -> client().writer(blobInfo, writeOptions));
             Streams.copy(inputStream, Channels.newOutputStream(new WritableByteChannel() {
                 @Override
                 public boolean isOpen() {
@@ -232,7 +241,7 @@ class GoogleCloudStorageBlobStore extends AbstractComponent implements BlobStore
                 }
             }));
         } catch (final StorageException se) {
-            if (se.getCode() == HTTP_PRECON_FAILED) {
+            if (failIfAlreadyExists && se.getCode() == HTTP_PRECON_FAILED) {
                 throw new FileAlreadyExistsException(blobInfo.getBlobId().getName(), null, se.getMessage());
             }
             throw se;
@@ -244,20 +253,24 @@ class GoogleCloudStorageBlobStore extends AbstractComponent implements BlobStore
      * 'multipart/related' request containing both data and metadata. The request is
      * gziped), see:
      * https://cloud.google.com/storage/docs/json_api/v1/how-tos/multipart-upload
-     *
-     * @param blobInfo the info for the blob to be uploaded
+     *  @param blobInfo the info for the blob to be uploaded
      * @param inputStream the stream containing the blob data
      * @param blobSize the size
+     * @param failIfAlreadyExists whether to throw a FileAlreadyExistsException if the given blob already exists
      */
-    private void writeBlobMultipart(BlobInfo blobInfo, InputStream inputStream, long blobSize) throws IOException {
+    private void writeBlobMultipart(BlobInfo blobInfo, InputStream inputStream, long blobSize, boolean failIfAlreadyExists)
+        throws IOException {
         assert blobSize <= LARGE_BLOB_THRESHOLD_BYTE_SIZE : "large blob uploads should use the resumable upload method";
         final ByteArrayOutputStream baos = new ByteArrayOutputStream(Math.toIntExact(blobSize));
         Streams.copy(inputStream, baos);
         try {
+            final Storage.BlobTargetOption[] targetOptions = failIfAlreadyExists ?
+                new Storage.BlobTargetOption[] { Storage.BlobTargetOption.doesNotExist() } :
+                new Storage.BlobTargetOption[0];
             SocketAccess.doPrivilegedVoidIOException(
-                    () -> client().create(blobInfo, baos.toByteArray(), Storage.BlobTargetOption.doesNotExist()));
+                    () -> client().create(blobInfo, baos.toByteArray(), targetOptions));
         } catch (final StorageException se) {
-            if (se.getCode() == HTTP_PRECON_FAILED) {
+            if (failIfAlreadyExists && se.getCode() == HTTP_PRECON_FAILED) {
                 throw new FileAlreadyExistsException(blobInfo.getBlobId().getName(), null, se.getMessage());
             }
             throw se;

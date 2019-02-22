@@ -21,28 +21,28 @@ package org.elasticsearch.nio;
 
 import java.io.IOException;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 public class BytesChannelContext extends SocketChannelContext {
 
     public BytesChannelContext(NioSocketChannel channel, NioSelector selector, Consumer<Exception> exceptionHandler,
                                ReadWriteHandler handler, InboundChannelBuffer channelBuffer) {
-        super(channel, selector, exceptionHandler, handler, channelBuffer);
+        this(channel, selector, exceptionHandler, handler, channelBuffer, ALWAYS_ALLOW_CHANNEL);
+    }
+
+    public BytesChannelContext(NioSocketChannel channel, NioSelector selector, Consumer<Exception> exceptionHandler,
+                               ReadWriteHandler handler, InboundChannelBuffer channelBuffer,
+                               Predicate<NioSocketChannel> allowChannelPredicate) {
+        super(channel, selector, exceptionHandler, handler, channelBuffer, allowChannelPredicate);
     }
 
     @Override
     public int read() throws IOException {
-        if (channelBuffer.getRemaining() == 0) {
-            // Requiring one additional byte will ensure that a new page is allocated.
-            channelBuffer.ensureCapacity(channelBuffer.getCapacity() + 1);
-        }
-
-        int bytesRead = readFromChannel(channelBuffer.sliceBuffersFrom(channelBuffer.getIndex()));
+        int bytesRead = readFromChannel(channelBuffer);
 
         if (bytesRead == 0) {
             return 0;
         }
-
-        channelBuffer.incrementIndex(bytesRead);
 
         handleReadBytes();
 
@@ -77,15 +77,14 @@ public class BytesChannelContext extends SocketChannelContext {
 
     @Override
     public boolean selectorShouldClose() {
-        return isPeerClosed() || hasIOException() || isClosing.get();
+        return closeNow() || isClosing.get();
     }
 
     /**
      * Returns a boolean indicating if the operation was fully flushed.
      */
     private boolean singleFlush(FlushOperation flushOperation) throws IOException {
-        int written = flushToChannel(flushOperation.getBuffersToWrite());
-        flushOperation.incrementIndex(written);
+        flushToChannel(flushOperation);
         return flushOperation.isFullyFlushed();
     }
 }

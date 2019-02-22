@@ -74,7 +74,7 @@ abstract class SingleDimensionValuesSource<T extends Comparable<T>> implements R
      * The current value is filled by a {@link LeafBucketCollector} that visits all the
      * values of each document. This method saves this current value in a slot and should only be used
      * in the context of a collection.
-     * See {@link this#getLeafCollector}.
+     * See {@link #getLeafCollector}.
      */
     abstract void copyCurrent(int slot);
 
@@ -87,7 +87,7 @@ abstract class SingleDimensionValuesSource<T extends Comparable<T>> implements R
      * The current value is filled by a {@link LeafBucketCollector} that visits all the
      * values of each document. This method compares this current value with the value present in
      * the provided slot and should only be used in the context of a collection.
-     * See {@link this#getLeafCollector}.
+     * See {@link #getLeafCollector}.
      */
     abstract int compareCurrent(int slot);
 
@@ -95,14 +95,24 @@ abstract class SingleDimensionValuesSource<T extends Comparable<T>> implements R
      * The current value is filled by a {@link LeafBucketCollector} that visits all the
      * values of each document. This method compares this current value with the after value
      * set on this source and should only be used in the context of a collection.
-     * See {@link this#getLeafCollector}.
+     * See {@link #getLeafCollector}.
      */
     abstract int compareCurrentWithAfter();
 
     /**
+     * Returns a hash code value for the provided <code>slot</code>.
+     */
+    abstract int hashCode(int slot);
+
+    /**
+     * Returns a hash code value for the current value.
+     */
+    abstract int hashCodeCurrent();
+
+    /**
      * Sets the after value for this source. Values that compares smaller are filtered.
      */
-    abstract void setAfter(Comparable<?> value);
+    abstract void setAfter(Comparable value);
 
     /**
      * Returns the after value set for this source.
@@ -120,7 +130,7 @@ abstract class SingleDimensionValuesSource<T extends Comparable<T>> implements R
      * Creates a {@link LeafBucketCollector} that extracts all values from a document and invokes
      * {@link LeafBucketCollector#collect} on the provided <code>next</code> collector for each of them.
      * The current value of this source is set on each call and can be accessed by <code>next</code> via
-     * the {@link this#copyCurrent(int)} and {@link this#compareCurrent(int)} methods. Note that these methods
+     * the {@link #copyCurrent(int)} and {@link #compareCurrent(int)} methods. Note that these methods
      * are only valid when invoked from the {@link LeafBucketCollector} created in this source.
      */
     abstract LeafBucketCollector getLeafCollector(LeafReaderContext context, LeafBucketCollector next) throws IOException;
@@ -129,7 +139,7 @@ abstract class SingleDimensionValuesSource<T extends Comparable<T>> implements R
      * Creates a {@link LeafBucketCollector} that sets the current value for each document to the provided
      * <code>value</code> and invokes {@link LeafBucketCollector#collect} on the provided <code>next</code> collector.
      */
-    abstract LeafBucketCollector getLeafCollector(Comparable<?> value,
+    abstract LeafBucketCollector getLeafCollector(Comparable value,
                                                   LeafReaderContext context, LeafBucketCollector next) throws IOException;
 
     /**

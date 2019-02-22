@@ -6,7 +6,6 @@
 package org.elasticsearch.xpack.security.authc.saml;
 
 import joptsimple.OptionSet;
-
 import org.elasticsearch.ExceptionsHelper;
 import org.elasticsearch.cli.MockTerminal;
 import org.elasticsearch.cli.UserException;
@@ -33,7 +32,6 @@ import org.opensaml.xmlsec.signature.Signature;
 import org.opensaml.xmlsec.signature.X509Certificate;
 import org.opensaml.xmlsec.signature.X509Data;
 import org.opensaml.xmlsec.signature.support.SignatureValidator;
-import org.w3c.dom.Element;
 
 import java.io.OutputStream;
 import java.nio.file.Files;
@@ -80,16 +78,15 @@ public class SamlMetadataCommandTests extends SamlTestCase {
         final boolean useSigningCredentials = randomBoolean();
         final Settings.Builder settingsBuilder = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "my_saml.type", "saml")
-                .put(RealmSettings.PREFIX + "my_saml.order", 1)
-                .put(RealmSettings.PREFIX + "my_saml.idp.entity_id", "https://okta.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.entity_id", "https://kibana.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.acs", "https://kibana.my.corp/saml/login")
-                .put(RealmSettings.PREFIX + "my_saml.sp.logout", "https://kibana.my.corp/saml/logout")
-                .put(RealmSettings.PREFIX + "my_saml.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1");
+                .put(RealmSettings.PREFIX + "saml.my_saml.order", 1)
+                .put(RealmSettings.PREFIX + "saml.my_saml.idp.entity_id", "https://okta.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.entity_id", "https://kibana.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.acs", "https://kibana.my.corp/saml/login")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.logout", "https://kibana.my.corp/saml/logout")
+                .put(RealmSettings.PREFIX + "saml.my_saml.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1");
         if (useSigningCredentials) {
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.signing.certificate", certPath.toString())
-                    .put(RealmSettings.PREFIX + "my_saml.signing.key", keyPath.toString());
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.signing.certificate", certPath.toString())
+                    .put(RealmSettings.PREFIX + "saml.my_saml.signing.key", keyPath.toString());
         }
         final Settings settings = settingsBuilder.build();
         final Environment env = TestEnvironment.newEnvironment(settings);
@@ -152,12 +149,12 @@ public class SamlMetadataCommandTests extends SamlTestCase {
     public void testFailIfMultipleRealmsExist() throws Exception {
         final Settings settings = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "saml_a.type", "saml")
-                .put(RealmSettings.PREFIX + "saml_a.sp.entity_id", "https://saml.a/")
-                .put(RealmSettings.PREFIX + "saml_a.sp.acs", "https://saml.a/")
-                .put(RealmSettings.PREFIX + "saml_b.type", "saml")
-                .put(RealmSettings.PREFIX + "saml_b.sp.entity_id", "https://saml.b/")
-                .put(RealmSettings.PREFIX + "saml_b.sp.acs", "https://saml.b/")
+                .put(RealmSettings.PREFIX + "saml.saml_a.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.saml_a.sp.entity_id", "https://saml.a/")
+                .put(RealmSettings.PREFIX + "saml.saml_a.sp.acs", "https://saml.a/")
+                .put(RealmSettings.PREFIX + "saml.saml_b.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.saml_b.sp.entity_id", "https://saml.b/")
+                .put(RealmSettings.PREFIX + "saml.saml_b.sp.acs", "https://saml.b/")
                 .build();
         final Environment env = TestEnvironment.newEnvironment(settings);
 
@@ -176,12 +173,12 @@ public class SamlMetadataCommandTests extends SamlTestCase {
     public void testSpecifyRealmNameAsParameter() throws Exception {
         final Settings settings = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "saml_a.type", "saml")
-                .put(RealmSettings.PREFIX + "saml_a.sp.entity_id", "https://saml.a/")
-                .put(RealmSettings.PREFIX + "saml_a.sp.acs", "https://saml.a/acs")
-                .put(RealmSettings.PREFIX + "saml_b.type", "saml")
-                .put(RealmSettings.PREFIX + "saml_b.sp.entity_id", "https://saml.b/")
-                .put(RealmSettings.PREFIX + "saml_b.sp.acs", "https://saml.b/acs")
+                .put(RealmSettings.PREFIX + "saml.saml_a.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.saml_a.sp.entity_id", "https://saml.a/")
+                .put(RealmSettings.PREFIX + "saml.saml_a.sp.acs", "https://saml.a/acs")
+                .put(RealmSettings.PREFIX + "saml.saml_b.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.saml_b.sp.entity_id", "https://saml.b/")
+                .put(RealmSettings.PREFIX + "saml.saml_b.sp.acs", "https://saml.b/acs")
                 .build();
         final Environment env = TestEnvironment.newEnvironment(settings);
 
@@ -207,11 +204,11 @@ public class SamlMetadataCommandTests extends SamlTestCase {
     public void testHandleAttributes() throws Exception {
         final Settings settings = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "saml1.type", "saml")
-                .put(RealmSettings.PREFIX + "saml1.sp.entity_id", "https://saml.example.com/")
-                .put(RealmSettings.PREFIX + "saml1.sp.acs", "https://saml.example.com/")
-                .put(RealmSettings.PREFIX + "saml1.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1")
-                .put(RealmSettings.PREFIX + "saml1.attributes.name", "displayName")
+                .put(RealmSettings.PREFIX + "saml.saml1.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.saml1.sp.entity_id", "https://saml.example.com/")
+                .put(RealmSettings.PREFIX + "saml.saml1.sp.acs", "https://saml.example.com/")
+                .put(RealmSettings.PREFIX + "saml.saml1.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1")
+                .put(RealmSettings.PREFIX + "saml.saml1.attributes.name", "displayName")
                 .build();
         final Environment env = TestEnvironment.newEnvironment(settings);
 
@@ -261,10 +258,10 @@ public class SamlMetadataCommandTests extends SamlTestCase {
     public void testHandleAttributesInBatchMode() throws Exception {
         final Settings settings = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "saml1.type", "saml")
-                .put(RealmSettings.PREFIX + "saml1.sp.entity_id", "https://saml.example.com/")
-                .put(RealmSettings.PREFIX + "saml1.sp.acs", "https://saml.example.com/")
-                .put(RealmSettings.PREFIX + "saml1.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1")
+                .put(RealmSettings.PREFIX + "saml.saml1.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.saml1.sp.entity_id", "https://saml.example.com/")
+                .put(RealmSettings.PREFIX + "saml.saml1.sp.acs", "https://saml.example.com/")
+                .put(RealmSettings.PREFIX + "saml.saml1.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1")
                 .build();
         final Environment env = TestEnvironment.newEnvironment(settings);
 
@@ -296,6 +293,7 @@ public class SamlMetadataCommandTests extends SamlTestCase {
     }
 
     public void testSigningMetadataWithPfx() throws Exception {
+        assumeFalse("Can't run in a FIPS JVM, PKCS12 keystores are not usable", inFipsJvm());
         final Path certPath = getDataPath("saml.crt");
         final Path keyPath = getDataPath("saml.key");
         final Path p12Path = getDataPath("saml.p12");
@@ -307,16 +305,16 @@ public class SamlMetadataCommandTests extends SamlTestCase {
         final boolean useSigningCredentials = randomBoolean();
         final Settings.Builder settingsBuilder = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "my_saml.type", "saml")
-                .put(RealmSettings.PREFIX + "my_saml.order", 1)
-                .put(RealmSettings.PREFIX + "my_saml.idp.entity_id", "https://okta.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.entity_id", "https://kibana.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.acs", "https://kibana.my.corp/saml/login")
-                .put(RealmSettings.PREFIX + "my_saml.sp.logout", "https://kibana.my.corp/saml/logout")
-                .put(RealmSettings.PREFIX + "my_saml.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1");
+                .put(RealmSettings.PREFIX + "saml.my_saml.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.my_saml.order", 1)
+                .put(RealmSettings.PREFIX + "saml.my_saml.idp.entity_id", "https://okta.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.entity_id", "https://kibana.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.acs", "https://kibana.my.corp/saml/login")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.logout", "https://kibana.my.corp/saml/logout")
+                .put(RealmSettings.PREFIX + "saml.my_saml.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1");
         if (useSigningCredentials) {
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.signing.certificate", certPath.toString())
-                    .put(RealmSettings.PREFIX + "my_saml.signing.key", keyPath.toString());
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.signing.certificate", certPath.toString())
+                    .put(RealmSettings.PREFIX + "saml.my_saml.signing.key", keyPath.toString());
         }
         final Settings settings = settingsBuilder.build();
         final Environment env = TestEnvironment.newEnvironment(settings);
@@ -355,6 +353,7 @@ public class SamlMetadataCommandTests extends SamlTestCase {
     }
 
     public void testSigningMetadataWithPasswordProtectedPfx() throws Exception {
+        assumeFalse("Can't run in a FIPS JVM, PKCS12 keystores are not usable", inFipsJvm());
         final Path certPath = getDataPath("saml.crt");
         final Path keyPath = getDataPath("saml.key");
         final Path p12Path = getDataPath("saml_with_password.p12");
@@ -367,15 +366,15 @@ public class SamlMetadataCommandTests extends SamlTestCase {
         final boolean useSigningCredentials = randomBoolean();
         final Settings.Builder settingsBuilder = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "my_saml.type", "saml")
-                .put(RealmSettings.PREFIX + "my_saml.order", 1)
-                .put(RealmSettings.PREFIX + "my_saml.idp.entity_id", "https://okta.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.entity_id", "https://kibana.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.acs", "https://kibana.my.corp/saml/login")
-                .put(RealmSettings.PREFIX + "my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
+                .put(RealmSettings.PREFIX + "saml.my_saml.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.my_saml.order", 1)
+                .put(RealmSettings.PREFIX + "saml.my_saml.idp.entity_id", "https://okta.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.entity_id", "https://kibana.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.acs", "https://kibana.my.corp/saml/login")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
         if (useSigningCredentials) {
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.signing.certificate", certPath.toString())
-                    .put(RealmSettings.PREFIX + "my_saml.signing.key", keyPath.toString());
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.signing.certificate", certPath.toString())
+                    .put(RealmSettings.PREFIX + "saml.my_saml.signing.key", keyPath.toString());
         }
         final Settings settings = settingsBuilder.build();
         final Environment env = TestEnvironment.newEnvironment(settings);
@@ -383,7 +382,7 @@ public class SamlMetadataCommandTests extends SamlTestCase {
         final MockTerminal terminal = new MockTerminal();
 
         final EntityDescriptor descriptor = command.buildEntityDescriptor(terminal, options, env);
-        Element e = command.possiblySignDescriptor(terminal, options, descriptor, env);
+        command.possiblySignDescriptor(terminal, options, descriptor, env);
         assertThat(descriptor, notNullValue());
         // Verify generated signature
         assertThat(descriptor.getSignature(), notNullValue());
@@ -393,25 +392,27 @@ public class SamlMetadataCommandTests extends SamlTestCase {
     public void testErrorSigningMetadataWithWrongPassword() throws Exception {
         final Path certPath = getDataPath("saml.crt");
         final Path keyPath = getDataPath("saml.key");
-        final Path p12Path = getDataPath("saml_with_password.p12");
+        final Path signingKeyPath = getDataPath("saml_with_password.key");
         final SamlMetadataCommand command = new SamlMetadataCommand((e) -> randomFrom(keyStore, null));
         final OptionSet options = command.getParser().parse(new String[]{
-                "-signing-bundle", p12Path.toString(),
-                "-signing-key-password", "wrong_password"
+            "-signing-cert", certPath.toString(),
+            "-signing-key", signingKeyPath.toString(),
+            "-signing-key-password", "wrongpassword"
+
         });
 
         final boolean useSigningCredentials = randomBoolean();
         final Settings.Builder settingsBuilder = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "my_saml.type", "saml")
-                .put(RealmSettings.PREFIX + "my_saml.order", 1)
-                .put(RealmSettings.PREFIX + "my_saml.idp.entity_id", "https://okta.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.entity_id", "https://kibana.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.acs", "https://kibana.my.corp/saml/login")
-                .put(RealmSettings.PREFIX + "my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
+                .put(RealmSettings.PREFIX + "saml.my_saml.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.my_saml.order", 1)
+                .put(RealmSettings.PREFIX + "saml.my_saml.idp.entity_id", "https://okta.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.entity_id", "https://kibana.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.acs", "https://kibana.my.corp/saml/login")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
         if (useSigningCredentials) {
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.signing.certificate", certPath.toString())
-                    .put(RealmSettings.PREFIX + "my_saml.signing.key", keyPath.toString());
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.signing.certificate", certPath.toString())
+                    .put(RealmSettings.PREFIX + "saml.my_saml.signing.key", keyPath.toString());
         }
         final Settings settings = settingsBuilder.build();
         final Environment env = TestEnvironment.newEnvironment(settings);
@@ -422,7 +423,7 @@ public class SamlMetadataCommandTests extends SamlTestCase {
         final UserException userException = expectThrows(UserException.class, () -> command.possiblySignDescriptor(terminal, options,
                 descriptor, env));
         assertThat(userException.getMessage(), containsString("Unable to create metadata document"));
-        assertThat(terminal.getOutput(), containsString("keystore password was incorrect"));
+        assertThat(terminal.getOutput(), containsString("Error parsing Private Key from"));
     }
 
     public void testSigningMetadataWithPem() throws Exception {
@@ -439,15 +440,15 @@ public class SamlMetadataCommandTests extends SamlTestCase {
         final boolean useSigningCredentials = randomBoolean();
         final Settings.Builder settingsBuilder = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "my_saml.type", "saml")
-                .put(RealmSettings.PREFIX + "my_saml.order", 1)
-                .put(RealmSettings.PREFIX + "my_saml.idp.entity_id", "https://okta.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.entity_id", "https://kibana.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.acs", "https://kibana.my.corp/saml/login")
-                .put(RealmSettings.PREFIX + "my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
+                .put(RealmSettings.PREFIX + "saml.my_saml.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.my_saml.order", 1)
+                .put(RealmSettings.PREFIX + "saml.my_saml.idp.entity_id", "https://okta.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.entity_id", "https://kibana.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.acs", "https://kibana.my.corp/saml/login")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
         if (useSigningCredentials) {
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.signing.certificate", certPath.toString())
-                    .put(RealmSettings.PREFIX + "my_saml.signing.key", keyPath.toString());
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.signing.certificate", certPath.toString())
+                    .put(RealmSettings.PREFIX + "saml.my_saml.signing.key", keyPath.toString());
         }
         final Settings settings = settingsBuilder.build();
         final Environment env = TestEnvironment.newEnvironment(settings);
@@ -473,22 +474,22 @@ public class SamlMetadataCommandTests extends SamlTestCase {
         final OptionSet options = command.getParser().parse(new String[]{
                 "-signing-cert", certPath.toString(),
                 "-signing-key", signingKeyPath.toString(),
-                "-signing-key-password", "saml"
+            "-signing-key-password", "saml"
 
         });
 
         final boolean useSigningCredentials = randomBoolean();
         final Settings.Builder settingsBuilder = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "my_saml.type", "saml")
-                .put(RealmSettings.PREFIX + "my_saml.order", 1)
-                .put(RealmSettings.PREFIX + "my_saml.idp.entity_id", "https://okta.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.entity_id", "https://kibana.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.acs", "https://kibana.my.corp/saml/login")
-                .put(RealmSettings.PREFIX + "my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
+                .put(RealmSettings.PREFIX + "saml.my_saml.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.my_saml.order", 1)
+                .put(RealmSettings.PREFIX + "saml.my_saml.idp.entity_id", "https://okta.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.entity_id", "https://kibana.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.acs", "https://kibana.my.corp/saml/login")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
         if (useSigningCredentials) {
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.signing.certificate", certPath.toString())
-                    .put(RealmSettings.PREFIX + "my_saml.signing.key", keyPath.toString());
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.signing.certificate", certPath.toString())
+                    .put(RealmSettings.PREFIX + "saml.my_saml.signing.key", keyPath.toString());
         }
         final Settings settings = settingsBuilder.build();
         final Environment env = TestEnvironment.newEnvironment(settings);
@@ -520,15 +521,15 @@ public class SamlMetadataCommandTests extends SamlTestCase {
         final boolean useSigningCredentials = randomBoolean();
         final Settings.Builder settingsBuilder = Settings.builder()
                 .put("path.home", createTempDir())
-                .put(RealmSettings.PREFIX + "my_saml.type", "saml")
-                .put(RealmSettings.PREFIX + "my_saml.order", 1)
-                .put(RealmSettings.PREFIX + "my_saml.idp.entity_id", "https://okta.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.entity_id", "https://kibana.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.acs", "https://kibana.my.corp/saml/login")
-                .put(RealmSettings.PREFIX + "my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
+                .put(RealmSettings.PREFIX + "saml.my_saml.type", "saml")
+                .put(RealmSettings.PREFIX + "saml.my_saml.order", 1)
+                .put(RealmSettings.PREFIX + "saml.my_saml.idp.entity_id", "https://okta.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.entity_id", "https://kibana.my.corp/")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.acs", "https://kibana.my.corp/saml/login")
+                .put(RealmSettings.PREFIX + "saml.my_saml.sp.logout", "https://kibana.my.corp/saml/logout");
         if (useSigningCredentials) {
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.signing.certificate", certPath.toString())
-                    .put(RealmSettings.PREFIX + "my_saml.signing.key", keyPath.toString());
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.signing.certificate", certPath.toString())
+                    .put(RealmSettings.PREFIX + "saml.my_saml.signing.key", keyPath.toString());
         }
         final Settings settings = settingsBuilder.build();
         final Environment env = TestEnvironment.newEnvironment(settings);
@@ -572,30 +573,32 @@ public class SamlMetadataCommandTests extends SamlTestCase {
         }
 
         final MockSecureSettings secureSettings = new MockSecureSettings();
-        secureSettings.setString(RealmSettings.PREFIX + "my_saml.signing.keystore.secure_password", "ks-password");
-        secureSettings.setString(RealmSettings.PREFIX + "my_saml.signing.keystore.secure_key_password", "key-password");
-        secureSettings.setString(RealmSettings.PREFIX + "my_saml.encryption.keystore.secure_password", "ks-password");
-        secureSettings.setString(RealmSettings.PREFIX + "my_saml.encryption.keystore.secure_key_password", "key-password");
+        secureSettings.setString(RealmSettings.PREFIX + "saml.my_saml.signing.keystore.secure_password", "ks-password");
+        secureSettings.setString(RealmSettings.PREFIX + "saml.my_saml.signing.keystore.secure_key_password", "key-password");
+        secureSettings.setString(RealmSettings.PREFIX + "saml.my_saml.encryption.keystore.secure_password", "ks-password");
+        secureSettings.setString(RealmSettings.PREFIX + "saml.my_saml.encryption.keystore.secure_key_password", "key-password");
 
         final SamlMetadataCommand command = new SamlMetadataCommand((e) -> keyStore);
         final OptionSet options = command.getParser().parse(new String[0]);
 
         final boolean useSigningCredentials = randomBoolean();
         final boolean useEncryptionCredentials = randomBoolean();
-        final Settings.Builder settingsBuilder = Settings.builder().put("path.home", dir).put(RealmSettings.PREFIX + "my_saml.type", "saml")
-                .put(RealmSettings.PREFIX + "my_saml.order", 1).put(RealmSettings.PREFIX + "my_saml.idp.entity_id", "https://okta.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.entity_id", "https://kibana.my.corp/")
-                .put(RealmSettings.PREFIX + "my_saml.sp.acs", "https://kibana.my.corp/saml/login")
-                .put(RealmSettings.PREFIX + "my_saml.sp.logout", "https://kibana.my.corp/saml/logout")
-                .put(RealmSettings.PREFIX + "my_saml.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1");
+        final Settings.Builder settingsBuilder = Settings.builder().put("path.home", dir)
+            .put(RealmSettings.PREFIX + "saml.my_saml.type", "saml")
+            .put(RealmSettings.PREFIX + "saml.my_saml.order", 1)
+            .put(RealmSettings.PREFIX + "saml.my_saml.idp.entity_id", "https://okta.my.corp/")
+            .put(RealmSettings.PREFIX + "saml.my_saml.sp.entity_id", "https://kibana.my.corp/")
+            .put(RealmSettings.PREFIX + "saml.my_saml.sp.acs", "https://kibana.my.corp/saml/login")
+            .put(RealmSettings.PREFIX + "saml.my_saml.sp.logout", "https://kibana.my.corp/saml/logout")
+            .put(RealmSettings.PREFIX + "saml.my_saml.attributes.principal", "urn:oid:0.9.2342.19200300.100.1.1");
         settingsBuilder.setSecureSettings(secureSettings);
         if (useSigningCredentials) {
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.signing.keystore.path", ksSigningFile.toString());
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.signing.keystore.type", "PKCS12");
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.signing.keystore.path", ksSigningFile.toString());
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.signing.keystore.type", "PKCS12");
         }
         if (useEncryptionCredentials) {
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.encryption.keystore.path", ksEncryptionFile.toString());
-            settingsBuilder.put(RealmSettings.PREFIX + "my_saml.encryption.keystore.type", "PKCS12");
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.encryption.keystore.path", ksEncryptionFile.toString());
+            settingsBuilder.put(RealmSettings.PREFIX + "saml.my_saml.encryption.keystore.type", "PKCS12");
         }
         final Settings settings = settingsBuilder.build();
         final Environment env = TestEnvironment.newEnvironment(settings);

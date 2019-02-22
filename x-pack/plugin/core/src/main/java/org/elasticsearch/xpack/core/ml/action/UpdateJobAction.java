@@ -24,7 +24,7 @@ import org.elasticsearch.xpack.core.ml.utils.ExceptionsHelper;
 import java.io.IOException;
 import java.util.Objects;
 
-public class UpdateJobAction extends Action<UpdateJobAction.Request, PutJobAction.Response> {
+public class UpdateJobAction extends Action<PutJobAction.Response> {
     public static final UpdateJobAction INSTANCE = new UpdateJobAction();
     public static final String NAME = "cluster:admin/xpack/ml/job/update";
 
@@ -49,7 +49,6 @@ public class UpdateJobAction extends Action<UpdateJobAction.Request, PutJobActio
 
         /** Indicates an update that was not triggered by a user */
         private boolean isInternal;
-        private boolean waitForAck = true;
 
         public Request(String jobId, JobUpdate update) {
             this(jobId, update, false);
@@ -83,14 +82,6 @@ public class UpdateJobAction extends Action<UpdateJobAction.Request, PutJobActio
             return isInternal;
         }
 
-        public boolean isWaitForAck() {
-            return waitForAck;
-        }
-
-        public void setWaitForAck(boolean waitForAck) {
-            this.waitForAck = waitForAck;
-        }
-
         @Override
         public ActionRequestValidationException validate() {
             return null;
@@ -106,10 +97,8 @@ public class UpdateJobAction extends Action<UpdateJobAction.Request, PutJobActio
             } else {
                 isInternal = false;
             }
-            if (in.getVersion().onOrAfter(Version.V_6_3_0)) {
-                waitForAck = in.readBoolean();
-            } else {
-                waitForAck = true;
+            if (in.getVersion().onOrAfter(Version.V_6_3_0) && in.getVersion().before(Version.V_7_0_0)) {
+                in.readBoolean(); // was waitForAck
             }
         }
 
@@ -121,8 +110,8 @@ public class UpdateJobAction extends Action<UpdateJobAction.Request, PutJobActio
             if (out.getVersion().onOrAfter(Version.V_6_2_2)) {
                 out.writeBoolean(isInternal);
             }
-            if (out.getVersion().onOrAfter(Version.V_6_3_0)) {
-                out.writeBoolean(waitForAck);
+            if (out.getVersion().onOrAfter(Version.V_6_3_0) && out.getVersion().before(Version.V_7_0_0)) {
+                out.writeBoolean(false); // was waitForAck
             }
         }
 

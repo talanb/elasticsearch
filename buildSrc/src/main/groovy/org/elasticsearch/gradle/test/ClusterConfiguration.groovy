@@ -29,7 +29,7 @@ class ClusterConfiguration {
     private final Project project
 
     @Input
-    String distribution = 'zip'
+    String distribution = 'default'
 
     @Input
     int numNodes = 1
@@ -68,7 +68,29 @@ class ClusterConfiguration {
      * In case of more than one node, this defaults to the number of nodes
      */
     @Input
-    Closure<Integer> minimumMasterNodes = { getNumNodes() > 1 ? getNumNodes() : -1 }
+    Closure<Integer> minimumMasterNodes = {
+        if (bwcVersion != null && bwcVersion.before("6.5.0")) {
+            return numNodes > 1 ? numNodes : -1
+        } else {
+            return numNodes > 1 ? numNodes.intdiv(2) + 1 : -1
+        }
+    }
+
+    /**
+     * Whether the initial_master_nodes setting should be automatically derived from the nodes
+     * in the cluster. Only takes effect if all nodes in the cluster understand this setting
+     * and the discovery type is not explicitly set.
+     */
+    @Input
+    boolean autoSetInitialMasterNodes = true
+
+    /**
+     * Whether the file-based discovery provider should be automatically setup based on
+     * the nodes in the cluster. Only takes effect if no other hosts provider is already
+     * configured.
+     */
+    @Input
+    boolean autoSetHostsProvider = true
 
     @Input
     String jvmArgs = "-Xms" + System.getProperty('tests.heap.size', '512m') +
@@ -96,12 +118,25 @@ class ClusterConfiguration {
         if (seedNode == node) {
             return null
         }
-        ant.waitfor(maxwait: '40', maxwaitunit: 'second', checkevery: '500', checkeveryunit: 'millisecond') {
+        ant.waitfor(maxwait: '40', maxwaitunit: 'second', checkevery: '500', checkeveryunit: 'millisecond',
+                timeoutproperty: "failed.${seedNode.transportPortsFile.path}") {
             resourceexists {
                 file(file: seedNode.transportPortsFile.toString())
             }
         }
+        if (ant.properties.containsKey("failed.${seedNode.transportPortsFile.path}".toString())) {
+            throw new GradleException("Failed to locate seed node transport file [${seedNode.transportPortsFile}]: " +
+                    "timed out waiting for it to be created after ${waitSeconds} seconds")
+        }
         return seedNode.transportUri()
+    }
+
+    /**
+     * A closure to call which returns a manually supplied list of unicast seed hosts.
+     */
+    @Input
+    Closure<List<String>> otherUnicastHostAddresses = {
+        Collections.emptyList()
     }
 
     /**
@@ -137,7 +172,12 @@ class ClusterConfiguration {
         this.project = project
     }
 
-    Map<String, String> systemProperties = new HashMap<>()
+    // **Note** for systemProperties, settings, keystoreFiles etc:
+    // value could be a GString that is evaluated to just a String
+    // there are cases when value depends on task that is not executed yet on configuration stage
+    Map<String, Object> systemProperties = new HashMap<>()
+
+    Map<String, Object> environmentVariables = new HashMap<>()
 
     Map<String, Object> settings = new HashMap<>()
 
@@ -157,8 +197,13 @@ class ClusterConfiguration {
     List<Object> dependencies = new ArrayList<>()
 
     @Input
-    void systemProperty(String property, String value) {
+    void systemProperty(String property, Object value) {
         systemProperties.put(property, value)
+    }
+
+    @Input
+    void environment(String variable, Object value) {
+        environmentVariables.put(variable, value)
     }
 
     @Input

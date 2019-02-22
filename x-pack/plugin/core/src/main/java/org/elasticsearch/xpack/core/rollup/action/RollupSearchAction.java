@@ -11,7 +11,7 @@ import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchResponse;
 import org.elasticsearch.client.ElasticsearchClient;
 
-public class RollupSearchAction extends Action<SearchRequest, SearchResponse> {
+public class RollupSearchAction extends Action<SearchResponse> {
 
     public static final RollupSearchAction INSTANCE = new RollupSearchAction();
     public static final String NAME = "indices:admin/xpack/rollup/search";
@@ -25,7 +25,11 @@ public class RollupSearchAction extends Action<SearchRequest, SearchResponse> {
         return new SearchResponse();
     }
 
-    static class RequestBuilder extends ActionRequestBuilder<SearchRequest, SearchResponse> {
+    public static class RequestBuilder extends ActionRequestBuilder<SearchRequest, SearchResponse> {
+        public RequestBuilder(ElasticsearchClient client, SearchRequest searchRequest) {
+            super(client, INSTANCE, searchRequest);
+        }
+
         RequestBuilder(ElasticsearchClient client) {
             super(client, INSTANCE, new SearchRequest());
         }

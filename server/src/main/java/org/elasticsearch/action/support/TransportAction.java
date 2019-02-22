@@ -18,37 +18,32 @@
  */
 
 package org.elasticsearch.action.support;
-
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.ActionRequest;
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.ActionResponse;
-import org.elasticsearch.cluster.metadata.IndexNameExpressionResolver;
-import org.elasticsearch.common.component.AbstractComponent;
-import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.tasks.Task;
 import org.elasticsearch.tasks.TaskListener;
 import org.elasticsearch.tasks.TaskManager;
-import org.elasticsearch.threadpool.ThreadPool;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-public abstract class TransportAction<Request extends ActionRequest, Response extends ActionResponse> extends AbstractComponent {
+public abstract class TransportAction<Request extends ActionRequest, Response extends ActionResponse> {
 
-    protected final ThreadPool threadPool;
     protected final String actionName;
     private final ActionFilter[] filters;
-    protected final IndexNameExpressionResolver indexNameExpressionResolver;
     protected final TaskManager taskManager;
+    /**
+     * @deprecated declare your own logger.
+     */
+    @Deprecated
+    protected Logger logger = LogManager.getLogger(getClass());
 
-    protected TransportAction(Settings settings, String actionName, ThreadPool threadPool, ActionFilters actionFilters,
-                              IndexNameExpressionResolver indexNameExpressionResolver, TaskManager taskManager) {
-        super(settings);
-        this.threadPool = threadPool;
+    protected TransportAction(String actionName, ActionFilters actionFilters, TaskManager taskManager) {
         this.actionName = actionName;
         this.filters = actionFilters.filters();
-        this.indexNameExpressionResolver = indexNameExpressionResolver;
         this.taskManager = taskManager;
     }
 
@@ -66,23 +61,19 @@ public abstract class TransportAction<Request extends ActionRequest, Response ex
          * this method.
          */
         Task task = taskManager.register("transport", actionName, request);
-        if (task == null) {
-            execute(null, request, listener);
-        } else {
-            execute(task, request, new ActionListener<Response>() {
-                @Override
-                public void onResponse(Response response) {
-                    taskManager.unregister(task);
-                    listener.onResponse(response);
-                }
+        execute(task, request, new ActionListener<Response>() {
+            @Override
+            public void onResponse(Response response) {
+                taskManager.unregister(task);
+                listener.onResponse(response);
+            }
 
-                @Override
-                public void onFailure(Exception e) {
-                    taskManager.unregister(task);
-                    listener.onFailure(e);
-                }
-            });
-        }
+            @Override
+            public void onFailure(Exception e) {
+                taskManager.unregister(task);
+                listener.onFailure(e);
+            }
+        });
         return task;
     }
 
@@ -130,11 +121,7 @@ public abstract class TransportAction<Request extends ActionRequest, Response ex
         requestFilterChain.proceed(task, actionName, request, listener);
     }
 
-    protected void doExecute(Task task, Request request, ActionListener<Response> listener) {
-        doExecute(request, listener);
-    }
-
-    protected abstract void doExecute(Request request, ActionListener<Response> listener);
+    protected abstract void doExecute(Task task, Request request, ActionListener<Response> listener);
 
     private static class RequestFilterChain<Request extends ActionRequest, Response extends ActionResponse>
             implements ActionFilterChain<Request, Response> {

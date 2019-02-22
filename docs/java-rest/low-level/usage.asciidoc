@@ -182,19 +182,20 @@ prevent having to specify them with each single request
 
 ["source","java",subs="attributes,callouts,macros"]
 --------------------------------------------------
-include-tagged::{doc-tests}/RestClientDocumentation.java[rest-client-init-max-retry-timeout]
---------------------------------------------------
-<1> Set the timeout that should be honoured in case multiple attempts are made
-for the same request. The default value is 30 seconds, same as the default
-socket timeout. In case the socket timeout is customized, the maximum retry
-timeout should be adjusted accordingly
-
-["source","java",subs="attributes,callouts,macros"]
---------------------------------------------------
 include-tagged::{doc-tests}/RestClientDocumentation.java[rest-client-init-failure-listener]
 --------------------------------------------------
 <1> Set a listener that gets notified every time a node fails,  in case actions
 need to be taken. Used internally when sniffing on failure is enabled.
+
+["source","java",subs="attributes,callouts,macros"]
+--------------------------------------------------
+include-tagged::{doc-tests}/RestClientDocumentation.java[rest-client-init-node-selector]
+--------------------------------------------------
+<1> Set the node selector to be used to filter the nodes the client will send
+requests to among the ones that are set to the client itself. This is useful
+for instance to prevent sending requests to dedicated master nodes when
+sniffing is enabled. By default the client sends requests to every configured
+node.
 
 ["source","java",subs="attributes,callouts,macros"]
 --------------------------------------------------
@@ -283,8 +284,7 @@ instance and share it between all requests:
 include-tagged::{doc-tests}/RestClientDocumentation.java[rest-client-options-singleton]
 --------------------------------------------------
 <1> Add any headers needed by all requests.
-<2> Set a `NodeSelector`.
-<3> Customize the response consumer.
+<2> Customize the response consumer.
 
 `addHeader` is for headers that are required for authorization or to work with
 a proxy in front of Elasticsearch. There is no need to set the `Content-Type`
@@ -298,7 +298,7 @@ You can also customize the response consumer used to buffer the asynchronous
 responses. The default consumer will buffer up to 100MB of response on the
 JVM heap. If the response is larger then the request will fail. You could,
 for example, lower the maximum size which might be useful if you are running
-in a heap constrained environment like the exmaple above.
+in a heap constrained environment like the example above.
 
 Once you've created the singleton you can use it when making requests:
 
@@ -315,20 +315,11 @@ adds an extra header:
 include-tagged::{doc-tests}/RestClientDocumentation.java[rest-client-options-customize-header]
 --------------------------------------------------
 
-Or you can send requests to nodes with a particular attribute:
-
-["source","java",subs="attributes,callouts,macros"]
---------------------------------------------------
-include-tagged::{doc-tests}/RestClientDocumentation.java[rest-client-options-customize-attribute]
---------------------------------------------------
-<1> Replace the node selector with one that selects nodes on a particular rack.
-
-
 ==== Multiple parallel asynchronous actions
 
 The client is quite happy to execute many actions in parallel. The following
 example indexes many documents in parallel. In a real world scenario you'd
-probably want to use the `_bulk` API instead, but the example is illustative.
+probably want to use the `_bulk` API instead, but the example is illustrative.
 
 ["source","java",subs="attributes,callouts,macros"]
 --------------------------------------------------

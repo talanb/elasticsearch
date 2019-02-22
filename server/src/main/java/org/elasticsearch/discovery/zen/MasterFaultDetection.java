@@ -19,6 +19,8 @@
 
 package org.elasticsearch.discovery.zen;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.elasticsearch.ElasticsearchException;
 import org.elasticsearch.cluster.ClusterName;
@@ -34,6 +36,7 @@ import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.util.concurrent.EsRejectedExecutionException;
+import org.elasticsearch.tasks.Task;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.ConnectTransportException;
 import org.elasticsearch.transport.TransportChannel;
@@ -53,6 +56,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * A fault detection that pings the master periodically to see if its alive.
  */
 public class MasterFaultDetection extends FaultDetection {
+
+    private static final Logger logger = LogManager.getLogger(MasterFaultDetection.class);
 
     public static final String MASTER_PING_ACTION_NAME = "internal:discovery/zen/fd/master_ping";
 
@@ -123,7 +128,7 @@ public class MasterFaultDetection extends FaultDetection {
         this.masterPinger = new MasterPinger();
 
         // we start pinging slightly later to allow the chosen master to complete it's own master election
-        threadPool.schedule(pingInterval, ThreadPool.Names.SAME, masterPinger);
+        threadPool.schedule(masterPinger, pingInterval, ThreadPool.Names.SAME);
     }
 
     public void stop(String reason) {
@@ -169,7 +174,7 @@ public class MasterFaultDetection extends FaultDetection {
                     }
                     this.masterPinger = new MasterPinger();
                     // we use schedule with a 0 time value to run the pinger on the pool as it will run on later
-                    threadPool.schedule(TimeValue.timeValueMillis(0), ThreadPool.Names.SAME, masterPinger);
+                    threadPool.schedule(masterPinger, TimeValue.timeValueMillis(0), ThreadPool.Names.SAME);
                 } catch (Exception e) {
                     logger.trace("[master] [{}] transport disconnected (with verified connect)", masterNode);
                     notifyMasterFailure(masterNode, null, "transport disconnected (with verified connect)");
@@ -213,7 +218,7 @@ public class MasterFaultDetection extends FaultDetection {
             final DiscoveryNode masterToPing = masterNode;
             if (masterToPing == null) {
                 // master is null, should not happen, but we are still running, so reschedule
-                threadPool.schedule(pingInterval, ThreadPool.Names.SAME, MasterPinger.this);
+                threadPool.schedule(MasterPinger.this, pingInterval, ThreadPool.Names.SAME);
                 return;
             }
 
@@ -224,8 +229,8 @@ public class MasterFaultDetection extends FaultDetection {
             transportService.sendRequest(masterToPing, MASTER_PING_ACTION_NAME, request, options,
                 new TransportResponseHandler<MasterPingResponseResponse>() {
                         @Override
-                        public MasterPingResponseResponse newInstance() {
-                            return new MasterPingResponseResponse();
+                        public MasterPingResponseResponse read(StreamInput in) throws IOException {
+                            return new MasterPingResponseResponse(in);
                         }
 
                         @Override
@@ -238,7 +243,7 @@ public class MasterFaultDetection extends FaultDetection {
                             // check if the master node did not get switched on us..., if it did, we simply return with no reschedule
                             if (masterToPing.equals(MasterFaultDetection.this.masterNode())) {
                                 // we don't stop on disconnection from master, we keep pinging it
-                                threadPool.schedule(pingInterval, ThreadPool.Names.SAME, MasterPinger.this);
+                                threadPool.schedule(MasterPinger.this, pingInterval, ThreadPool.Names.SAME);
                             }
                         }
 
@@ -296,13 +301,13 @@ public class MasterFaultDetection extends FaultDetection {
     }
 
     /** Thrown when a ping reaches the wrong node */
-    static class ThisIsNotTheMasterYouAreLookingForException extends IllegalStateException {
+    public static class ThisIsNotTheMasterYouAreLookingForException extends IllegalStateException {
 
-        ThisIsNotTheMasterYouAreLookingForException(String msg) {
+        public ThisIsNotTheMasterYouAreLookingForException(String msg) {
             super(msg);
         }
 
-        ThisIsNotTheMasterYouAreLookingForException() {
+        public ThisIsNotTheMasterYouAreLookingForException() {
         }
 
         @Override
@@ -321,7 +326,7 @@ public class MasterFaultDetection extends FaultDetection {
     private class MasterPingRequestHandler implements TransportRequestHandler<MasterPingRequest> {
 
         @Override
-        public void messageReceived(final MasterPingRequest request, final TransportChannel channel) throws Exception {
+        public void messageReceived(final MasterPingRequest request, final TransportChannel channel, Task task) throws Exception {
             final DiscoveryNodes nodes = clusterStateSupplier.get().nodes();
             // check if we are really the same master as the one we seemed to be think we are
             // this can happen if the master got "kill -9" and then another node started using the same port
@@ -396,7 +401,7 @@ public class MasterFaultDetection extends FaultDetection {
 
     public static class MasterPingRequest extends TransportRequest {
 
-        private DiscoveryNode sourceNode;
+        public DiscoveryNode sourceNode;
 
         private DiscoveryNode masterNode;
         private ClusterName clusterName;
@@ -404,7 +409,7 @@ public class MasterFaultDetection extends FaultDetection {
         public MasterPingRequest() {
         }
 
-        private MasterPingRequest(DiscoveryNode sourceNode, DiscoveryNode masterNode, ClusterName clusterName) {
+        public MasterPingRequest(DiscoveryNode sourceNode, DiscoveryNode masterNode, ClusterName clusterName) {
             this.sourceNode = sourceNode;
             this.masterNode = masterNode;
             this.clusterName = clusterName;
@@ -427,19 +432,13 @@ public class MasterFaultDetection extends FaultDetection {
         }
     }
 
-    private static class MasterPingResponseResponse extends TransportResponse {
+    public static class MasterPingResponseResponse extends TransportResponse {
 
-        private MasterPingResponseResponse() {
+        public MasterPingResponseResponse() {
         }
 
-        @Override
-        public void readFrom(StreamInput in) throws IOException {
-            super.readFrom(in);
-        }
-
-        @Override
-        public void writeTo(StreamOutput out) throws IOException {
-            super.writeTo(out);
+        public MasterPingResponseResponse(StreamInput in) throws IOException {
+            super(in);
         }
     }
 }

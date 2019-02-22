@@ -8,12 +8,6 @@ package org.elasticsearch.xpack.sql.action;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.support.WriteRequest;
-import org.elasticsearch.xpack.sql.plugin.SqlClearCursorAction;
-import org.elasticsearch.xpack.sql.plugin.SqlClearCursorRequestBuilder;
-import org.elasticsearch.xpack.sql.plugin.SqlClearCursorResponse;
-import org.elasticsearch.xpack.sql.plugin.SqlQueryAction;
-import org.elasticsearch.xpack.sql.plugin.SqlQueryRequestBuilder;
-import org.elasticsearch.xpack.sql.plugin.SqlQueryResponse;
 import org.elasticsearch.xpack.sql.session.Cursor;
 
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.assertAcked;
@@ -24,13 +18,13 @@ import static org.hamcrest.Matchers.notNullValue;
 
 public class SqlClearCursorActionIT extends AbstractSqlIntegTestCase {
 
-    public void testSqlClearCursorAction() throws Exception {
+    public void testSqlClearCursorAction() {
         assertAcked(client().admin().indices().prepareCreate("test").get());
         BulkRequestBuilder bulkRequestBuilder = client().prepareBulk();
         int indexSize = randomIntBetween(100, 300);
         logger.info("Indexing {} records", indexSize);
         for (int i = 0; i < indexSize; i++) {
-            bulkRequestBuilder.add(new IndexRequest("test", "doc", "id" + i).source("data", "bar", "count", i));
+            bulkRequestBuilder.add(new IndexRequest("test").id("id" + i).source("data", "bar", "count", i));
         }
         bulkRequestBuilder.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE).get();
         ensureYellow("test");
@@ -54,13 +48,13 @@ public class SqlClearCursorActionIT extends AbstractSqlIntegTestCase {
         assertEquals(0, getNumberOfSearchContexts());
     }
 
-    public void testAutoCursorCleanup() throws Exception {
+    public void testAutoCursorCleanup() {
         assertAcked(client().admin().indices().prepareCreate("test").get());
         BulkRequestBuilder bulkRequestBuilder = client().prepareBulk();
         int indexSize = randomIntBetween(100, 300);
         logger.info("Indexing {} records", indexSize);
         for (int i = 0; i < indexSize; i++) {
-            bulkRequestBuilder.add(new IndexRequest("test", "doc", "id" + i).source("data", "bar", "count", i));
+            bulkRequestBuilder.add(new IndexRequest("test").id("id" + i).source("data", "bar", "count", i));
         }
         bulkRequestBuilder.setRefreshPolicy(WriteRequest.RefreshPolicy.IMMEDIATE).get();
         ensureYellow("test");
@@ -81,7 +75,7 @@ public class SqlClearCursorActionIT extends AbstractSqlIntegTestCase {
         do {
             sqlQueryResponse = new SqlQueryRequestBuilder(client(), SqlQueryAction.INSTANCE).cursor(sqlQueryResponse.cursor()).get();
             fetched += sqlQueryResponse.size();
-        } while (sqlQueryResponse.cursor().equals("") == false);
+        } while (sqlQueryResponse.cursor().isEmpty() == false);
         assertEquals(indexSize, fetched);
 
         SqlClearCursorResponse cleanCursorResponse = new SqlClearCursorRequestBuilder(client(), SqlClearCursorAction.INSTANCE)

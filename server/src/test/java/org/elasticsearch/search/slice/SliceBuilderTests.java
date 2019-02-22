@@ -163,8 +163,8 @@ public class SliceBuilderTests extends ESTestCase {
         }
 
         @Override
-        public Boolean allowPartialSearchResults() {
-            return null;
+        public boolean allowPartialSearchResults() {
+            return true;
         }
 
         @Override
@@ -183,17 +183,7 @@ public class SliceBuilderTests extends ESTestCase {
         }
 
         @Override
-        public void setProfile(boolean profile) {
-
-        }
-
-        @Override
-        public boolean isProfile() {
-            return false;
-        }
-
-        @Override
-        public BytesReference cacheKey() throws IOException {
+        public BytesReference cacheKey() {
             return null;
         }
 
@@ -306,11 +296,12 @@ public class SliceBuilderTests extends ESTestCase {
         builder.startObject();
         sliceBuilder.innerToXContent(builder);
         builder.endObject();
-        XContentParser parser = createParser(shuffleXContent(builder));
-        SliceBuilder secondSliceBuilder = SliceBuilder.fromXContent(parser);
-        assertNotSame(sliceBuilder, secondSliceBuilder);
-        assertEquals(sliceBuilder, secondSliceBuilder);
-        assertEquals(sliceBuilder.hashCode(), secondSliceBuilder.hashCode());
+        try (XContentParser parser = createParser(shuffleXContent(builder))) {
+            SliceBuilder secondSliceBuilder = SliceBuilder.fromXContent(parser);
+            assertNotSame(sliceBuilder, secondSliceBuilder);
+            assertEquals(sliceBuilder, secondSliceBuilder);
+            assertEquals(sliceBuilder.hashCode(), secondSliceBuilder.hashCode());
+        }
     }
 
     public void testInvalidArguments() throws Exception {
